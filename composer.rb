@@ -750,7 +750,9 @@ if prefer :apps4, 'rails-signup-download'
 
   stage_three do
     say_wizard "recipe stage three"
-    repo = 'https://raw.github.com/RailsApps/rails-signup-download/master/'
+    # NOTE: usage $ rm -rf my_app ; rails new my_app  -Tm RAILSCOMPOSER/composer.rb
+    # repo = 'https://raw.github.com/RailsApps/rails-signup-download/master/'
+    repo = '~/Download/src/RAILSCOMPOSER_REPO/' #TODO: make latest perfect repo as LOCALREPO
 
     # >-------------------------------[ Config ]---------------------------------<
 
@@ -759,7 +761,11 @@ if prefer :apps4, 'rails-signup-download'
     # >-------------------------------[ Models ]--------------------------------<
 
     copy_from_repo 'app/models/user.rb', :repo => repo
-
+    # require 'byebug' ; byebug
+    if (prefer :devise_modules, 'confirmable') || (prefer :devise_modules, 'invitable')
+      #NOTE: gsub_file二度念押し
+      gsub_file 'app/models/user.rb', /:registerable,/, ":registerable, :confirmable," #XXX
+    end
     # >-------------------------------[ Controllers ]--------------------------------<
 
     copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
@@ -1310,7 +1316,7 @@ if recipes.include? 'tests'
     when 'rspec'
       say_wizard "Adding DatabaseCleaner, FactoryGirl, Faker, Launchy, Selenium"
       prefs[:continuous_testing] = multiple_choice "Continuous testing?", [["None", "none"], ["Guard", "guard"]] unless prefs.has_key? :continuous_testing
-    end
+  end
 end
 
 ## Front-end Framework
@@ -1347,17 +1353,17 @@ end
 
 ## Authentication and Authorization
 if (recipes.include? 'devise') || (recipes.include? 'omniauth')
-  prefs[:authentication] = multiple_choice "Authentication?", [["None", "none"], ["Devise", "devise"], ["OmniAuth", "omniauth"]] unless prefs.has_key? :authentication
+  prefs[:authentication] = multiple_choice "Authentication?", [["None", "none"], ["Devise", "devise"], ["OmniAuth", "omniauth"]] if prefs[:authentication].blank?
   case prefs[:authentication]
     when 'devise'
       prefs[:devise_modules] = multiple_choice "Devise modules?", [["Devise with default modules","default"],
-      ["Devise with Confirmable module","confirmable"],
-      ["Devise with Confirmable and Invitable modules","invitable"]] unless prefs.has_key? :devise_modules
+      ["Devise with Confirmable & Invitable i& Trackable modules","invitable"]] if prefs[:devise_modules].blank?
+      # ["Devise with Confirmable module","confirmable"],
     when 'omniauth'
       prefs[:omniauth_provider] = multiple_choice "OmniAuth provider?", [["Facebook", "facebook"], ["Twitter", "twitter"], ["GitHub", "github"],
-        ["LinkedIn", "linkedin"], ["Google-Oauth-2", "google_oauth2"], ["Tumblr", "tumblr"]] unless prefs.has_key? :omniauth_provider
+        ["LinkedIn", "linkedin"], ["Google-Oauth-2", "google_oauth2"], ["Tumblr", "tumblr"]] if prefs[:omniauth_provider].blank?
   end
-  prefs[:authorization] = multiple_choice "Authorization?", [["None", "none"], ["Simple role-based", "roles"], ["Pundit", "pundit"]] unless prefs.has_key? :authorization
+  prefs[:authorization] = multiple_choice "Authorization?", [["None", "none"], ["Simple role-based", "roles"], ["Pundit", "pundit"]] if prefs[:authorization].blank?
   if prefer :authentication, 'devise'
     if (prefer :authorization, 'roles') || (prefer :authorization, 'pundit')
       prefs[:dashboard] = multiple_choice "Admin interface for database?", [["None", "none"],
@@ -2099,7 +2105,13 @@ stage_two do
     end
     if (prefer :devise_modules, 'confirmable') || (prefer :devise_modules, 'invitable')
       gsub_file 'app/models/user.rb', /:registerable,/, ":registerable, :confirmable,"
-      generate 'migration AddConfirmableToUsers confirmation_token:string confirmed_at:datetime confirmation_sent_at:datetime unconfirmed_email:string'
+      # generate 'migration AddConfirmableToUsers confirmation_token:string confirmed_at:datetime confirmation_sent_at:datetime unconfirmed_email:string'
+      # copy_rails_migration_file(dir1, dir2, wildcard_pattern)
+      dest_dir = 'db/migrate/'
+      FileUtils.mkdir_p dest_dir
+      file_from =  Dir.glob(File.expand_path('../RAILSCOMPOSER_REPO/db/migrate/*_devise_create_users.rb')).first
+      file_to   =  Dir.glob(File.expand_path("#{dest_dir}*_devise_create_users.rb")).first
+      copy_from file_from, file_to
     end
     run 'bundle exec rake db:migrate'
   end
