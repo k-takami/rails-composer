@@ -183,7 +183,7 @@ def copy_from_repo(filename, opts = {})
   end
   if (prefer :templates, 'haml') && (filename.include? 'views')
     remove_file destination_filename
-    destination_filename = destination_filename.gsub(/.erb/, '.haml')
+    # destination_filename = destination_filename.gsub(/.erb/, '.haml')
   end
   if (prefer :templates, 'slim') && (filename.include? 'views')
     remove_file destination_filename
@@ -192,7 +192,8 @@ def copy_from_repo(filename, opts = {})
   begin
     remove_file destination_filename
     if (prefer :templates, 'haml') && (filename.include? 'views')
-      create_file destination_filename, html_to_haml(repo + source_filename)
+      # create_file destination_filename, html_to_haml(repo + source_filename)
+      create_file destination_filename, (repo + source_filename)
     elsif (prefer :templates, 'slim') && (filename.include? 'views')
       create_file destination_filename, html_to_slim(repo + source_filename)
     else
@@ -203,14 +204,21 @@ def copy_from_repo(filename, opts = {})
   end
 end
 
+def thor_complient_path(source)
+  return source if source =~/^https?:/
+  File.expand_path(source)
+end
+
 def html_to_haml(source)
+  #NOTE: run bin/rake haml:erb2haml # # HAML_RAILS_DELETE_ERB=true オプションがある
+  #      コピーしたファイルだけhtmlにしてもしょうがない。
   begin
-    html = open(source) {|input| input.binmode.read }
+    html = open(thor_complient_path(source)) {|input| input.binmode.read }
     Html2haml::HTML.new(html, :erb => true, :xhtml => true).render
   rescue RubyParser::SyntaxError
     say_wizard "Ignoring RubyParser::SyntaxError"
     # special case to accommodate https://github.com/RailsApps/rails-composer/issues/55
-    html = open(source) {|input| input.binmode.read }
+    html = open(thor_complient_path(source)) {|input| input.binmode.read }
     say_wizard "applying patch" if html.include? 'card_month'
     say_wizard "applying patch" if html.include? 'card_year'
     html = html.gsub(/, {add_month_numbers: true}, {name: nil, id: "card_month"}/, '')
@@ -222,7 +230,8 @@ def html_to_haml(source)
 end
 
 def html_to_slim(source)
-  html = open(source) {|input| input.binmode.read }
+  html = open(thor_complient_path(source)) {|input| input.binmode.read }
+  # html = open(source) {|input| input.binmode.read }
   haml = Html2haml::HTML.new(html, :erb => true, :xhtml => true).render
   Haml2Slim.convert!(haml)
 end
@@ -354,45 +363,45 @@ if options[:verbose]
   print "\nconfig: " ;p config
 end
 
-case Rails::VERSION::MAJOR.to_s
-when "5"
-  prefs[:apps4] = multiple_choice "Build a starter application?",
-    [["Build a RailsApps example application", "railsapps"],
-    ["Contributed applications", "contributed_app"],
-    ["Custom application (experimental)", "none"]] unless prefs.has_key? :apps4
-  case prefs[:apps4]
-    when 'railsapps'
-        prefs[:apps4] = multiple_choice "Choose a starter application.",
-        [["learn-rails", "learn-rails"],
-        ["rails-bootstrap", "rails-bootstrap"],
-        ["rails-foundation", "rails-foundation"],
-        ["rails-mailinglist-activejob", "rails-mailinglist-activejob"],
-        ["rails-omniauth", "rails-omniauth"],
-        ["rails-devise", "rails-devise"],
-        ["rails-devise-roles", "rails-devise-roles"],
-        ["rails-devise-pundit", "rails-devise-pundit"],
-        ["rails-signup-download", "rails-signup-download"],
-        ["rails-stripe-checkout", "rails-stripe-checkout"],
-        ["rails-stripe-coupons", "rails-stripe-coupons"]]
-    when 'contributed_app'
-      prefs[:apps4] = multiple_choice "Choose a starter application.",
-        [["rails-signup-thankyou", "rails-signup-thankyou"]]
-  end
-when "3"
-  say_wizard "Please upgrade to Rails 4.1 or newer."
-when "4"
-  case Rails::VERSION::MINOR.to_s
-  when "0"
-    say_wizard "Please upgrade to Rails 4.1 or newer."
-  else
+noattend = true #FIXME: templateオーバーライド  ---> require 'optparse' ; noattend = option[:noattend] 
+if noattend
+  prefs[:apps4] = "rails-stripe-checkout" #TODO:
+  prefs[:prod_webserver] = prefs[:dev_webserver] = "puma"
+  prefs[:database] = "sqlite"
+  prefs[:templates] = "erb" # "haml"
+  # prefs[:templates] = "haml" #NG hamlにすると、gemの個別変換バグがある。
+  prefs[:dashboard] = "administrate" # none
+  prefs[:form_builder] = "simple_form" # "none"
+  prefs[:frontend] = "bootstrap3" # "none"
+  prefs[:jquery] = "gem" # "yarn"
+  prefs[:layouts] = "none" #"shop_homepage" #NOTE: noneだとstripe関連のモーダルを表示
+
+  prefs[:tests] = "none" # "rspec"
+  prefs[:email] = 'none' # "gmail"
+  prefs[:authentication] = "devise" # "omniauth"  <-- github facebook twitter linkedin google_oauth2 tumblr 
+  prefs[:devise_modules] = "invitable" #"default"
+  # prefs[:authorization] = "none" "roles" "pundit"
+  prefs[:analytics] = "none" # ga segmentio with ga_id, segmentio_api_key
+  prefs[:announcements] = 'none' # 'mailinglist'
+  prefs[:deployment] = "none" # "heroku" "capistrano3"
+  prefs[:disable_turbolinks] = true
+  prefs[:ban_spiders] = true
+  prefs[:jsruntime] = false
+  prefs[:github] = config[:github] = false
+end
+
+
+
+
+unless prefs[:apps4]
+  case Rails::VERSION::MAJOR.to_s
+  when "5"
     prefs[:apps4] = multiple_choice "Build a starter application?",
       [["Build a RailsApps example application", "railsapps"],
-      ["Contributed applications (none available)", "contributed_app"],
+      ["Contributed applications", "contributed_app"],
       ["Custom application (experimental)", "none"]] unless prefs.has_key? :apps4
     case prefs[:apps4]
       when 'railsapps'
-        case Rails::VERSION::MINOR.to_s
-        when "2"
           prefs[:apps4] = multiple_choice "Choose a starter application.",
           [["learn-rails", "learn-rails"],
           ["rails-bootstrap", "rails-bootstrap"],
@@ -404,21 +413,53 @@ when "4"
           ["rails-devise-pundit", "rails-devise-pundit"],
           ["rails-signup-download", "rails-signup-download"],
           ["rails-stripe-checkout", "rails-stripe-checkout"],
-          ["rails-stripe-coupons", "rails-stripe-coupons"],
-          ["rails-stripe-membership-saas", "rails-stripe-membership-saas"]]
-        else
-          prefs[:apps4] = multiple_choice "Upgrade to Rails 4.2 for more choices.",
-          [["learn-rails", "learn-rails"],
-          ["rails-bootstrap", "rails-bootstrap"],
-          ["rails-foundation", "rails-foundation"],
-          ["rails-omniauth", "rails-omniauth"],
-          ["rails-devise", "rails-devise"],
-          ["rails-devise-roles", "rails-devise-roles"],
-          ["rails-devise-pundit", "rails-devise-pundit"]]
-        end
+          ["rails-stripe-coupons", "rails-stripe-coupons"]]
       when 'contributed_app'
-        prefs[:apps4] = multiple_choice "No contributed applications are available.",
-          [["create custom application", "railsapps"]]
+        prefs[:apps4] = multiple_choice "Choose a starter application.",
+          [["rails-signup-thankyou", "rails-signup-thankyou"]]
+    end
+  when "3"
+    say_wizard "Please upgrade to Rails 4.1 or newer."
+  when "4"
+    case Rails::VERSION::MINOR.to_s
+    when "0"
+      say_wizard "Please upgrade to Rails 4.1 or newer."
+    else
+      prefs[:apps4] = multiple_choice "Build a starter application?",
+        [["Build a RailsApps example application", "railsapps"],
+        ["Contributed applications (none available)", "contributed_app"],
+        ["Custom application (experimental)", "none"]] unless prefs.has_key? :apps4
+      case prefs[:apps4]
+        when 'railsapps'
+          case Rails::VERSION::MINOR.to_s
+          when "2"
+            prefs[:apps4] = multiple_choice "Choose a starter application.",
+            [["learn-rails", "learn-rails"],
+            ["rails-bootstrap", "rails-bootstrap"],
+            ["rails-foundation", "rails-foundation"],
+            ["rails-mailinglist-activejob", "rails-mailinglist-activejob"],
+            ["rails-omniauth", "rails-omniauth"],
+            ["rails-devise", "rails-devise"],
+            ["rails-devise-roles", "rails-devise-roles"],
+            ["rails-devise-pundit", "rails-devise-pundit"],
+            ["rails-signup-download", "rails-signup-download"],
+            ["rails-stripe-checkout", "rails-stripe-checkout"],
+            ["rails-stripe-coupons", "rails-stripe-coupons"],
+            ["rails-stripe-membership-saas", "rails-stripe-membership-saas"]]
+          else
+            prefs[:apps4] = multiple_choice "Upgrade to Rails 4.2 for more choices.",
+            [["learn-rails", "learn-rails"],
+            ["rails-bootstrap", "rails-bootstrap"],
+            ["rails-foundation", "rails-foundation"],
+            ["rails-omniauth", "rails-omniauth"],
+            ["rails-devise", "rails-devise"],
+            ["rails-devise-roles", "rails-devise-roles"],
+            ["rails-devise-pundit", "rails-devise-pundit"]]
+          end
+        when 'contributed_app'
+          prefs[:apps4] = multiple_choice "No contributed applications are available.",
+            [["create custom application", "railsapps"]]
+      end
     end
   end
 end
@@ -730,12 +771,14 @@ say_recipe 'rails_signup_download'
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_signup_download.rb
 
 if prefer :apps4, 'rails-signup-download'
+  unless noattend   #NOTE: important
+    prefs[:devise_modules] = false
+    prefs[:form_builder] = false
+    prefs[:git] = true
+  end
   prefs[:authentication] = 'devise'
   prefs[:authorization] = 'roles'
   prefs[:better_errors] = true
-  prefs[:devise_modules] = false
-  prefs[:form_builder] = false
-  prefs[:git] = true
   prefs[:local_env_file] = false
   prefs[:pry] = false
   prefs[:secrets] = ['mailchimp_list_id', 'mailchimp_api_key']
@@ -760,12 +803,11 @@ if prefer :apps4, 'rails-signup-download'
 
     # >-------------------------------[ Models ]--------------------------------<
 
-    copy_from_repo 'app/models/user.rb', :repo => repo
-    # require 'byebug' ; byebug
-    if (prefer :devise_modules, 'confirmable') || (prefer :devise_modules, 'invitable')
-      #NOTE: gsub_file二度念押し
-      gsub_file 'app/models/user.rb', /:registerable,/, ":registerable, :confirmable," #XXX
-    end
+    # copy_from_repo 'app/models/user.rb', :repo => repo
+    # if (prefer :devise_modules, 'confirmable') || (prefer :devise_modules, 'invitable')
+    #   #NOTE: gsub_file二度念押し
+    #   gsub_file 'app/models/user.rb', /:registerable,/, ":registerable, :confirmable," #XXX
+    # end
     # >-------------------------------[ Controllers ]--------------------------------<
 
     copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
@@ -962,21 +1004,18 @@ if prefer :apps4, 'rails-stripe-checkout'
   prefs[:frontend] = 'bootstrap3'
   prefs[:authentication] = 'devise'
   prefs[:authorization] = 'roles'
+  unless noattend   #NOTE: important
+    prefs[:devise_modules] = false
+    prefs[:form_builder] = false
+    prefs[:git] = true
+  end
   prefs[:better_errors] = true
-  prefs[:devise_modules] = false
-  prefs[:form_builder] = false
-  prefs[:git] = true
   prefs[:local_env_file] = false
   prefs[:pry] = false
-  prefs[:secrets] = ['product_price',
-    'product_title',
-    'stripe_publishable_key',
-    'stripe_api_key',
-    'mailchimp_list_id',
-    'mailchimp_api_key']
+  prefs[:secrets] = ['product_price', 'product_title', 'stripe_publishable_key', 'stripe_api_key', 'mailchimp_list_id', 'mailchimp_api_key']
   prefs[:pages] = 'about+users'
   prefs[:locale] = 'none'
-  prefs[:rubocop] = false
+  prefs[:rubocop] = true #false
   prefs[:rvmrc] = true
 
   # gems
@@ -986,12 +1025,15 @@ if prefer :apps4, 'rails-stripe-checkout'
 
   stage_three do
     say_wizard "recipe stage three"
-    repo = 'https://raw.github.com/RailsApps/rails-stripe-checkout/master/'
+    # NOTE: usage $ rm -rf my_app ; rails new my_app  -Tm RAILSCOMPOSER/composer.rb
+    # repo = 'https://raw.github.com/RailsApps/rails-stripe-checkout/master/'
+    repo = '~/Download/src/rails-stripe-checkout/'
+    # repo = '~/Download/src/RAILSCOMPOSER_REPO/' #TODO: make latest perfect repo as LOCALREPO
 
     # >-------------------------------[ Config ]---------------------------------<
 
     copy_from_repo 'config/initializers/active_job.rb', :repo => repo
-    copy_from_repo 'config/initializers/devise_permitted_parameters.rb', :repo => repo
+    # copy_from_repo 'config/initializers/devise_permitted_parameters.rb', :repo => repo #XXX: buggy
     copy_from_repo 'config/initializers/stripe.rb', :repo => repo
 
     # >-------------------------------[ Assets ]--------------------------------<
@@ -999,9 +1041,7 @@ if prefer :apps4, 'rails-stripe-checkout'
     copy_from_repo 'app/assets/images/rubyonrails.png', :repo => repo
 
     # >-------------------------------[ Models ]--------------------------------<
-
-    copy_from_repo 'app/models/user.rb', :repo => repo
-
+    # copy_from_repo 'app/models/user.rb', :repo => repo #XXX: buggy
     # >-------------------------------[ Controllers ]--------------------------------<
 
     copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
@@ -1014,7 +1054,7 @@ if prefer :apps4, 'rails-stripe-checkout'
 
     # >-------------------------------[ Views ]--------------------------------<
 
-    copy_from_repo 'app/views/devise/registrations/new.html.erb', :repo => repo
+    copy_from_repo 'app/views/devise/registrations/new.html.erb', :repo => repo #TODO: rails g devise:view 不調
     copy_from_repo 'app/views/visitors/_purchase.html.erb', :repo => repo
     copy_from_repo 'app/views/visitors/index.html.erb', :repo => repo
     copy_from_repo 'app/views/products/product.pdf', :repo => repo
@@ -1053,12 +1093,7 @@ if prefer :apps4, 'rails-stripe-coupons'
   prefs[:git] = true
   prefs[:local_env_file] = false
   prefs[:pry] = false
-  prefs[:secrets] = ['stripe_publishable_key',
-    'stripe_api_key',
-    'product_price',
-    'product_title',
-    'mailchimp_list_id',
-    'mailchimp_api_key']
+  prefs[:secrets] = ['stripe_publishable_key', 'stripe_api_key', 'product_price', 'product_title', 'mailchimp_list_id', 'mailchimp_api_key']
   prefs[:pages] = 'about+users'
   prefs[:locale] = 'none'
   prefs[:rubocop] = false
@@ -1071,7 +1106,8 @@ if prefer :apps4, 'rails-stripe-coupons'
 
   stage_three do
     say_wizard "recipe stage three"
-    repo = 'https://raw.github.com/RailsApps/rails-stripe-coupons/master/'
+    # repo = 'https://raw.github.com/RailsApps/rails-stripe-coupons/master/'
+    repo = '~/Download/src/rails-stripe-checkout/'
 
     # >-------------------------------[ Migrations ]---------------------------------<
 
@@ -1291,129 +1327,132 @@ say_wizard "You are using Rails version #{Rails::VERSION::STRING}."
 gemfile = File.read(destination_root() + '/Gemfile')
 sqlite_detected = gemfile.include? 'sqlite3'
 
-## Web Server
-prefs[:dev_webserver] = multiple_choice "Web server for development?", [["Puma (default)", "puma"],
-  ["Thin", "thin"], ["Unicorn", "unicorn"], ["Phusion Passenger (Apache/Nginx)", "passenger"],
-  ["Phusion Passenger (Standalone)", "passenger_standalone"]] unless prefs.has_key? :dev_webserver
-prefs[:prod_webserver] = multiple_choice "Web server for production?", [["Same as development", "same"],
-  ["Thin", "thin"], ["Unicorn", "unicorn"], ["Phusion Passenger (Apache/Nginx)", "passenger"],
-  ["Phusion Passenger (Standalone)", "passenger_standalone"]] unless prefs.has_key? :prod_webserver
-prefs[:prod_webserver] = prefs[:dev_webserver] if prefs[:prod_webserver] == 'same'
+unless noattend
+  ## Web Server
+  prefs[:dev_webserver] = multiple_choice "Web server for development?", [["Puma (default)", "puma"],
+    ["Thin", "thin"], ["Unicorn", "unicorn"], ["Phusion Passenger (Apache/Nginx)", "passenger"],
+    ["Phusion Passenger (Standalone)", "passenger_standalone"]] unless prefs.has_key? :dev_webserver
+  prefs[:prod_webserver] = multiple_choice "Web server for production?", [["Same as development", "same"],
+    ["Thin", "thin"], ["Unicorn", "unicorn"], ["Phusion Passenger (Apache/Nginx)", "passenger"],
+    ["Phusion Passenger (Standalone)", "passenger_standalone"]] unless prefs.has_key? :prod_webserver
+  prefs[:prod_webserver] = prefs[:dev_webserver] if prefs[:prod_webserver] == 'same'
 
-## Database Adapter
-prefs[:database] = "sqlite" if prefer :database, 'default'
-prefs[:database] = multiple_choice "Database used in development?", [["SQLite", "sqlite"], ["PostgreSQL", "postgresql"],
-  ["MySQL", "mysql"]] unless prefs.has_key? :database
+  ## Database Adapter
+  prefs[:database] = "sqlite" if prefer :database, 'default'
+  prefs[:database] = multiple_choice "Database used in development?", [["SQLite", "sqlite"], ["PostgreSQL", "postgresql"],
+    ["MySQL", "mysql"]] unless prefs.has_key? :database
 
-## Template Engine
-prefs[:templates] = multiple_choice "Template engine?", [["ERB", "erb"], ["Haml", "haml"], ["Slim", "slim"]] unless prefs.has_key? :templates
+  ## Template Engine
+  prefs[:templates] = multiple_choice "Template engine?", [["ERB", "erb"], ["Haml", "haml"], ["Slim", "slim"]] unless prefs.has_key? :templates
 
-## Testing Framework
-if recipes.include? 'tests'
-  prefs[:tests] = multiple_choice "Test framework?", [["None", "none"],
-    ["RSpec", "rspec"]] unless prefs.has_key? :tests
-  case prefs[:tests]
-    when 'rspec'
-      say_wizard "Adding DatabaseCleaner, FactoryGirl, Faker, Launchy, Selenium"
-      prefs[:continuous_testing] = multiple_choice "Continuous testing?", [["None", "none"], ["Guard", "guard"]] unless prefs.has_key? :continuous_testing
-  end
-end
-
-## Front-end Framework
-if recipes.include? 'frontend'
-  prefs[:frontend] = multiple_choice "Front-end framework?", [["None", "none"],
-    ["Bootstrap 4.0", "bootstrap4"], ["Bootstrap 3.3", "bootstrap3"], ["Bootstrap 2.3", "bootstrap2"],
-    ["Zurb Foundation 5.5", "foundation5"], ["Zurb Foundation 4.0", "foundation4"],
-    ["Simple CSS", "simple"]] unless prefs.has_key? :frontend
-end
-
-## jQuery
-if Rails::VERSION::MAJOR == 5 && Rails::VERSION::MINOR >= 1
-  if prefs[:frontend] == 'none'
-    prefs[:jquery] = multiple_choice "Add jQuery?", [["No", "none"],
-      ["Add jquery-rails gem", "gem"],
-      ["Add using yarn", "yarn"]] unless prefs.has_key? :jquery
-  else
-    prefs[:jquery] = multiple_choice "How to install jQuery?",
-      [["Add jquery-rails gem", "gem"],
-      ["Add using yarn", "yarn"]] unless prefs.has_key? :jquery
-  end
-end
-
-## Email
-if recipes.include? 'email'
-  unless prefs.has_key? :email
-    say_wizard "The Devise 'forgot password' feature requires email." if prefer :authentication, 'devise'
-    prefs[:email] = multiple_choice "Add support for sending email?", [["None", "none"], ["Gmail","gmail"], ["SMTP","smtp"],
-      ["SendGrid","sendgrid"], ["Mandrill","mandrill"]]
-  end
-else
-  prefs[:email] = 'none'
-end
-
-## Authentication and Authorization
-if (recipes.include? 'devise') || (recipes.include? 'omniauth')
-  prefs[:authentication] = multiple_choice "Authentication?", [["None", "none"], ["Devise", "devise"], ["OmniAuth", "omniauth"]] if prefs[:authentication].blank?
-  case prefs[:authentication]
-    when 'devise'
-      prefs[:devise_modules] = multiple_choice "Devise modules?", [["Devise with default modules","default"],
-      ["Devise with Confirmable & Invitable i& Trackable modules","invitable"]] if prefs[:devise_modules].blank?
-      # ["Devise with Confirmable module","confirmable"],
-    when 'omniauth'
-      prefs[:omniauth_provider] = multiple_choice "OmniAuth provider?", [["Facebook", "facebook"], ["Twitter", "twitter"], ["GitHub", "github"],
-        ["LinkedIn", "linkedin"], ["Google-Oauth-2", "google_oauth2"], ["Tumblr", "tumblr"]] if prefs[:omniauth_provider].blank?
-  end
-  prefs[:authorization] = multiple_choice "Authorization?", [["None", "none"], ["Simple role-based", "roles"], ["Pundit", "pundit"]] if prefs[:authorization].blank?
-  if prefer :authentication, 'devise'
-    if (prefer :authorization, 'roles') || (prefer :authorization, 'pundit')
-      prefs[:dashboard] = multiple_choice "Admin interface for database?", [["None", "none"],
-        ["Thoughtbot Administrate", "administrate"]] unless prefs.has_key? :dashboard
+  ## Testing Framework
+  if recipes.include? 'tests'
+    prefs[:tests] = multiple_choice "Test framework?", [["None", "none"],
+      ["RSpec", "rspec"]] unless prefs.has_key? :tests
+    case prefs[:tests]
+      when 'rspec'
+        say_wizard "Adding DatabaseCleaner, FactoryGirl, Faker, Launchy, Selenium"
+        prefs[:continuous_testing] = multiple_choice "Continuous testing?", [["None", "none"], ["Guard", "guard"]] unless prefs.has_key? :continuous_testing
     end
   end
-end
 
-## Form Builder
-## (no simple_form for Bootstrap 4 yet)
-unless prefs[:frontend] == 'bootstrap4'
-  prefs[:form_builder] = multiple_choice "Use a form builder gem?", [["None", "none"], ["SimpleForm", "simple_form"]] unless prefs.has_key? :form_builder
-end
+  ## Front-end Framework
+      #NOTE: simple_formがBS4対応しIE9が案件で対象外になればBS4を選択肢に入れる ["Bootstrap 4.0", "bootstrap4"], ["Bootstrap 3.3", "bootstrap3"], ["Bootstrap 2.3", "bootstrap2"],
+  if recipes.include? 'frontend'
+    prefs[:frontend] = multiple_choice "Front-end framework?", [["None", "none"],
+      ["Bootstrap 3.3", "bootstrap3"], ["Bootstrap 2.3", "bootstrap2"],
+      ["Zurb Foundation 5.5", "foundation5"], ["Zurb Foundation 4.0", "foundation4"],
+      ["Simple CSS", "simple"]] unless prefs.has_key? :frontend
+  end
 
-## Pages
-if recipes.include? 'pages'
-  prefs[:pages] = multiple_choice "Add pages?", [["None", "none"],
-    ["Home", "home"], ["Home and About", "about"],
-    ["Home and Users", "users"],
-    ["Home, About, and Users", "about+users"]] unless prefs.has_key? :pages
-end
+  ## jQuery
+  if Rails::VERSION::MAJOR == 5 && Rails::VERSION::MINOR >= 1
+    if prefs[:frontend] == 'none'
+      prefs[:jquery] = multiple_choice "Add jQuery?", [["No", "none"],
+        ["Add jquery-rails gem", "gem"],
+        ["Add using yarn", "yarn"]] unless prefs.has_key? :jquery
+    else
+      prefs[:jquery] = multiple_choice "How to install jQuery?",
+        [["Add jquery-rails gem", "gem"],
+        ["Add using yarn", "yarn"]] unless prefs.has_key? :jquery
+    end
+  end
 
-## Bootstrap Page Templates
-if recipes.include? 'pages'
-  if prefs[:frontend] == 'bootstrap3'
-    say_wizard "Which Bootstrap page template? Visit startbootstrap.com."
-    prefs[:layouts] = multiple_choice "Add Bootstrap page templates?", [["None", "none"],
-    ["1 Col Portfolio", "one_col_portfolio"],
-    ["2 Col Portfolio", "two_col_portfolio"],
-    ["3 Col Portfolio", "three_col_portfolio"],
-    ["4 Col Portfolio", "four_col_portfolio"],
-    ["Bare", "bare"],
-    ["Blog Home", "blog_home"],
-    ["Business Casual", "business_casual"],
-    ["Business Frontpage", "business_frontpage"],
-    ["Clean Blog", "clean_blog"],
-    ["Full Width Pics", "full_width_pics"],
-    ["Heroic Features", "heroic_features"],
-    ["Landing Page", "landing_page"],
-    ["Modern Business", "modern_business"],
-    ["One Page Wonder", "one_page_wonder"],
-    ["Portfolio Item", "portfolio_item"],
-    ["Round About", "round_about"],
-    ["Shop Homepage", "shop_homepage"],
-    ["Shop Item", "shop_item"],
-    ["Simple Sidebar", "simple_sidebar"],
-    ["Small Business", "small_business"],
-    ["Stylish Portfolio", "stylish_portfolio"],
-    ["The Big Picture", "the_big_picture"],
-    ["Thumbnail Gallery", "thumbnail_gallery"]] unless prefs.has_key? :layouts
+  ## Email
+  if recipes.include? 'email'
+    unless prefs.has_key? :email
+      say_wizard "The Devise 'forgot password' feature requires email." if prefer :authentication, 'devise'
+      prefs[:email] = multiple_choice "Add support for sending email?", [["None", "none"], ["Gmail","gmail"], ["SMTP","smtp"],
+        ["SendGrid","sendgrid"], ["Mandrill","mandrill"]]
+    end
+  else
+    prefs[:email] = 'none'
+  end
+
+  ## Authentication and Authorization
+  if (recipes.include? 'devise') || (recipes.include? 'omniauth')
+    prefs[:authentication] = multiple_choice "Authentication?", [["None", "none"], ["Devise", "devise"], ["OmniAuth", "omniauth"]] if prefs[:authentication].blank?
+    case prefs[:authentication]
+      when 'devise'
+        prefs[:devise_modules] = multiple_choice "Devise modules?", [["Devise with default modules","default"],
+        ["Devise with Confirmable & Invitable i& Trackable modules","invitable"]] if prefs[:devise_modules].blank?
+        # ["Devise with Confirmable module","confirmable"],
+      when 'omniauth'
+        prefs[:omniauth_provider] = multiple_choice "OmniAuth provider?", [["Facebook", "facebook"], ["Twitter", "twitter"], ["GitHub", "github"],
+          ["LinkedIn", "linkedin"], ["Google-Oauth-2", "google_oauth2"], ["Tumblr", "tumblr"]] if prefs[:omniauth_provider].blank?
+    end
+    prefs[:authorization] = multiple_choice "Authorization?", [["None", "none"], ["Simple role-based", "roles"], ["Pundit", "pundit"]] if prefs[:authorization].blank?
+    if prefer :authentication, 'devise'
+      if (prefer :authorization, 'roles') || (prefer :authorization, 'pundit')
+        prefs[:dashboard] = multiple_choice "Admin interface for database?", [["None", "none"],
+          ["Thoughtbot Administrate", "administrate"]] unless prefs.has_key? :dashboard
+      end
+    end
+  end
+
+  ## Form Builder
+  ## (no simple_form for Bootstrap 4 yet)
+  unless prefs[:frontend] == 'bootstrap4'
+    prefs[:form_builder] = multiple_choice "Use a form builder gem?", [["None", "none"], ["SimpleForm", "simple_form"]] unless prefs.has_key? :form_builder
+  end
+
+  ## Pages
+  if recipes.include? 'pages'
+    prefs[:pages] = multiple_choice "Add pages?", [["None", "none"],
+      ["Home", "home"], ["Home and About", "about"],
+      ["Home and Users", "users"],
+      ["Home, About, and Users", "about+users"]] unless prefs.has_key? :pages
+  end
+
+  ## Bootstrap Page Templates
+  if recipes.include? 'pages'
+    if prefs[:frontend] == 'bootstrap3'
+      say_wizard "Which Bootstrap page template? Visit startbootstrap.com."
+      prefs[:layouts] = multiple_choice "Add Bootstrap page templates?", [["None", "none"],
+      ["1 Col Portfolio", "one_col_portfolio"],
+      ["2 Col Portfolio", "two_col_portfolio"],
+      ["3 Col Portfolio", "three_col_portfolio"],
+      ["4 Col Portfolio", "four_col_portfolio"],
+      ["Bare", "bare"],
+      ["Blog Home", "blog_home"],
+      ["Business Casual", "business_casual"],
+      ["Business Frontpage", "business_frontpage"],
+      ["Clean Blog", "clean_blog"],
+      ["Full Width Pics", "full_width_pics"],
+      ["Heroic Features", "heroic_features"],
+      ["Landing Page", "landing_page"],
+      ["Modern Business", "modern_business"],
+      ["One Page Wonder", "one_page_wonder"],
+      ["Portfolio Item", "portfolio_item"],
+      ["Round About", "round_about"],
+      ["Shop Homepage", "shop_homepage"],
+      ["Shop Item", "shop_item"],
+      ["Simple Sidebar", "simple_sidebar"],
+      ["Small Business", "small_business"],
+      ["Stylish Portfolio", "stylish_portfolio"],
+      ["The Big Picture", "the_big_picture"],
+      ["Thumbnail Gallery", "thumbnail_gallery"]] unless prefs.has_key? :layouts
+    end
   end
 end
 
@@ -2097,13 +2136,16 @@ stage_two do
   if prefer :authentication, 'devise'
     # prevent logging of password_confirmation
     gsub_file 'config/initializers/filter_parameter_logging.rb', /:password/, ':password, :password_confirmation'
+    say_wizard "devise処理 ###########################################"
     generate 'devise:install'
     generate 'devise_invitable:install' if prefer :devise_modules, 'invitable'
     generate 'devise user' # create the User model
+    generate 'devise:views'
     unless :apps4.to_s.include? 'rails-stripe-'
       generate 'migration AddNameToUsers name:string'
     end
     if (prefer :devise_modules, 'confirmable') || (prefer :devise_modules, 'invitable')
+      say_wizard "iuser.rbとmigration処理 ###########################################"
       gsub_file 'app/models/user.rb', /:registerable,/, ":registerable, :confirmable,"
       # generate 'migration AddConfirmableToUsers confirmation_token:string confirmed_at:datetime confirmation_sent_at:datetime unconfirmed_email:string'
       # copy_rails_migration_file(dir1, dir2, wildcard_pattern)
@@ -2534,14 +2576,16 @@ say_recipe 'analytics'
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/analytics.rb
 
-prefs[:analytics] = multiple_choice "Install page-view analytics?", [["None", "none"],
-  ["Google Analytics", "ga"],
-  ["Segment.com", "segmentio"]] unless prefs.has_key? :analytics
-case prefs[:analytics]
-  when 'ga'
-    ga_id = ask_wizard('Google Analytics ID?')
-  when 'segmentio'
-    segmentio_api_key = ask_wizard('Segment.com Write Key?')
+unless noattend
+  prefs[:analytics] = multiple_choice "Install page-view analytics?", [["None", "none"],
+    ["Google Analytics", "ga"],
+    ["Segment.com", "segmentio"]] unless prefs.has_key? :analytics
+  case prefs[:analytics]
+    when 'ga'
+      ga_id = ask_wizard('Google Analytics ID?')
+    when 'segmentio'
+      segmentio_api_key = ask_wizard('Segment.com Write Key?')
+  end
 end
 
 stage_two do
@@ -2575,31 +2619,32 @@ say_recipe 'deployment'
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/deployment.rb
+unless noattend
+  prefs[:deployment] = multiple_choice "Prepare for deployment?", [["no", "none"],
+      ["Heroku", "heroku"],
+      ["Capistrano", "capistrano3"]] unless prefs.has_key? :deployment
 
-prefs[:deployment] = multiple_choice "Prepare for deployment?", [["no", "none"],
-    ["Heroku", "heroku"],
-    ["Capistrano", "capistrano3"]] unless prefs.has_key? :deployment
-
-if prefer :deployment, 'heroku'
-  say_wizard "installing gems for Heroku"
-  if prefer :database, 'sqlite'
-    gsub_file 'Gemfile', /.*gem 'sqlite3'\n/, ''
-    add_gem 'sqlite3', group: [:development, :test]
-    add_gem 'pg', group: :production
+  if prefer :deployment, 'heroku'
+    say_wizard "installing gems for Heroku"
+    if prefer :database, 'sqlite'
+      gsub_file 'Gemfile', /.*gem 'sqlite3'\n/, ''
+      add_gem 'sqlite3', group: [:development, :test]
+      add_gem 'pg', group: :production
+    end
   end
-end
 
-if prefer :deployment, 'capistrano3'
-  say_wizard "installing gems for Capistrano"
-  add_gem 'capistrano', '~> 3.0.1', group: :development
-  add_gem 'capistrano-rvm', '~> 0.1.1', group: :development
-  add_gem 'capistrano-bundler', group: :development
-  add_gem 'capistrano-rails', '~> 1.1.0', group: :development
-  add_gem 'capistrano-rails-console', group: :development
-  stage_two do
-    say_wizard "recipe stage two"
-    say_wizard "installing Capistrano files"
-    run 'bundle exec cap install'
+  if prefer :deployment, 'capistrano3'
+    say_wizard "installing gems for Capistrano"
+    add_gem 'capistrano', '~> 3.0.1', group: :development
+    add_gem 'capistrano-rvm', '~> 0.1.1', group: :development
+    add_gem 'capistrano-bundler', group: :development
+    add_gem 'capistrano-rails', '~> 1.1.0', group: :development
+    add_gem 'capistrano-rails-console', group: :development
+    stage_two do
+      say_wizard "recipe stage two"
+      say_wizard "installing Capistrano files"
+      run 'bundle exec cap install'
+    end
   end
 end
 
@@ -2688,50 +2733,52 @@ if prefs[:rubocop]
   copy_from_repo '.rubocop.yml'
 end
 
-## Disable Turbolinks
-if config['disable_turbolinks']
-  prefs[:disable_turbolinks] = true
-end
-if prefs[:disable_turbolinks]
-  say_wizard "recipe removing support for Rails Turbolinks"
-  stage_two do
-    say_wizard "recipe stage two"
-    gsub_file 'Gemfile', /gem 'turbolinks'\n/, ''
-    gsub_file 'Gemfile', /gem 'turbolinks', '~> 5'\n/, ''
-    gsub_file 'app/assets/javascripts/application.js', "//= require turbolinks\n", ''
-    case prefs[:templates]
-      when 'erb'
-        gsub_file 'app/views/layouts/application.html.erb', /, 'data-turbolinks-track' => true/, ''
-        gsub_file 'app/views/layouts/application.html.erb', /, 'data-turbolinks-track' => 'reload'/, ''
-      when 'haml'
-        gsub_file 'app/views/layouts/application.html.haml', /, 'data-turbolinks-track' => true/, ''
-        gsub_file 'app/views/layouts/application.html.haml', /, 'data-turbolinks-track' => 'reload'/, ''
-      when 'slim'
-        gsub_file 'app/views/layouts/application.html.slim', /, 'data-turbolinks-track' => true/, ''
-        gsub_file 'app/views/layouts/application.html.slim', /, 'data-turbolinks-track' => 'reload'/, ''
+unless noattend
+  ## Disable Turbolinks
+  if config['disable_turbolinks']
+    prefs[:disable_turbolinks] = true
+  end
+  if prefs[:disable_turbolinks]
+    say_wizard "recipe removing support for Rails Turbolinks"
+    stage_two do
+      say_wizard "recipe stage two"
+      gsub_file 'Gemfile', /gem 'turbolinks'\n/, ''
+      gsub_file 'Gemfile', /gem 'turbolinks', '~> 5'\n/, ''
+      gsub_file 'app/assets/javascripts/application.js', "//= require turbolinks\n", ''
+      case prefs[:templates]
+        when 'erb'
+          gsub_file 'app/views/layouts/application.html.erb', /, 'data-turbolinks-track' => true/, ''
+          gsub_file 'app/views/layouts/application.html.erb', /, 'data-turbolinks-track' => 'reload'/, ''
+        when 'haml'
+          gsub_file 'app/views/layouts/application.html.haml', /, 'data-turbolinks-track' => true/, ''
+          gsub_file 'app/views/layouts/application.html.haml', /, 'data-turbolinks-track' => 'reload'/, ''
+        when 'slim'
+          gsub_file 'app/views/layouts/application.html.slim', /, 'data-turbolinks-track' => true/, ''
+          gsub_file 'app/views/layouts/application.html.slim', /, 'data-turbolinks-track' => 'reload'/, ''
+      end
     end
   end
-end
 
-## BAN SPIDERS
-prefs[:ban_spiders] = true if config['ban_spiders']
-if prefs[:ban_spiders]
-  say_wizard "recipe banning spiders by modifying 'public/robots.txt'"
-  stage_two do
-    say_wizard "recipe stage two"
-    gsub_file 'public/robots.txt', /# User-Agent/, 'User-Agent'
-    gsub_file 'public/robots.txt', /# Disallow/, 'Disallow'
-  end
-end
-
-## JSRUNTIME
-case RbConfig::CONFIG['host_os']
-  when /linux/i
-    prefs[:jsruntime] = yes_wizard? "Add 'therubyracer' JavaScript runtime (for Linux users without node.js)?" unless prefs.has_key? :jsruntime
-    if prefs[:jsruntime]
-      say_wizard "recipe adding 'therubyracer' JavaScript runtime gem"
-      add_gem 'therubyracer', :platform => :ruby
+  ## BAN SPIDERS
+  prefs[:ban_spiders] = true if config['ban_spiders']
+  if prefs[:ban_spiders]
+    say_wizard "recipe banning spiders by modifying 'public/robots.txt'"
+    stage_two do
+      say_wizard "recipe stage two"
+      gsub_file 'public/robots.txt', /# User-Agent/, 'User-Agent'
+      gsub_file 'public/robots.txt', /# Disallow/, 'Disallow'
     end
+  end
+
+  ## JSRUNTIME
+  case RbConfig::CONFIG['host_os']
+    when /linux/i
+      prefs[:jsruntime] = yes_wizard? "Add 'therubyracer' JavaScript runtime (for Linux users without node.js)?" unless prefs.has_key? :jsruntime
+      if prefs[:jsruntime]
+        say_wizard "recipe adding 'therubyracer' JavaScript runtime gem"
+        add_gem 'therubyracer', :platform => :ruby
+      end
+  end
 end
 
 stage_four do
@@ -2745,6 +2792,8 @@ stage_four do
   if prefer :templates, 'slim'
     gsub_file 'Gemfile', /.*gem 'haml2slim'\n/, "\n"
     gsub_file 'Gemfile', /.*gem 'html2haml'\n/, "\n"
+  elsif prefer :templates, 'haml'
+    run 'bin/rake haml:erb2haml HAML_RAILS_DELETE_ERB=true'
   end
   # remove gems and files used to assist rails_apps_composer
   gsub_file 'Gemfile', /.*gem 'rails_apps_pages'\n/, ''
@@ -2852,3 +2901,5 @@ say_wizard("Your new application will contain diagnostics in its README file.")
 say_wizard("When reporting an issue on GitHub, include the README diagnostics.")
 say_wizard "Finished running the rails_apps_composer app template."
 say_wizard "Your new Rails app is ready. Time to run 'bundle install'."
+say_wizard "### To convert into HAML, run ' bin/rake haml:erb2haml HAML_RAILS_DELETE_ERB=true '.  ### " if prefer :templates, 'haml'
+
