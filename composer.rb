@@ -100,7 +100,6 @@ def add_gem(*all) Gemfile.add(*all); end
 @diagnostics_prefs = []
 diagnostics = {}
 
-# >-------------------------- templates/helpers.erb --------------------------start<
 def recipes; @recipes end
 def recipe?(name); @recipes.include?(name) end
 def prefs; @prefs end
@@ -159,8 +158,14 @@ def stage_four(&block); @stage_four_blocks << [@current_recipe, block]; end
 @before_configs = {}
 def before_config(&block); @before_configs[@current_recipe] = block; end
 
-def copy_from(source, destination)
+def copy_from(source, destination, options = {})
+  # mkdir_p オプションとFind.findオプションつけたい ---> https://github.com/RailsApps/rails_apps_composer/blob/master/templates/helpers.erb #XXX
   begin
+    FileUtils.mkdir_p File.dirname(destination) if options[:mkdir]
+    if options[:glob]
+      source      = Dir.glob(source).first
+      destination = Dir.glob(destination).first
+    end
     remove_file destination
     get source, destination
   rescue OpenURI::HTTPError
@@ -169,12 +174,11 @@ def copy_from(source, destination)
 end
 
 def copy_from_repo(filename, opts = {})
-  repo = 'https://raw.github.com/RailsApps/rails-composer/master/files/'
-  repo = opts[:repo] unless opts[:repo].nil?
+  repo = opts[:repo] || 'https://raw.github.com/RailsApps/rails-composer/master/files/'
   if (!opts[:prefs].nil?) && (!prefs.has_value? opts[:prefs])
     return
   end
-  source_filename = filename
+  source_filename = opts[:suffix] ? "#{filename}.#{prefs[:apps4]}" : filename
   destination_filename = filename
   unless opts[:prefs].nil?
     if filename.include? opts[:prefs]
@@ -298,29 +302,23 @@ end
 
 # >---------------------------------[ Recipes ]----------------------------------<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >---------------------------------[ core ]----------------------------------<
 @current_recipe = "core"
 @before_configs["core"].call if @before_configs["core"]
 say_recipe 'core'
 @configs[@current_recipe] = config
-# >----------------------------- recipes/core.rb -----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/core.rb
 
 ## Git
 say_wizard "selected all core recipes"
-# >----------------------------- recipes/core.rb -----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >----------------------------------[ git ]----------------------------------<
 @current_recipe = "git"
 @before_configs["git"].call if @before_configs["git"]
 say_recipe 'git'
 @configs[@current_recipe] = config
-# >----------------------------- recipes/git.rb ------------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/git.rb
@@ -341,16 +339,12 @@ else
     File.unlink git_files
   end
 end
-# >----------------------------- recipes/git.rb ------------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >-------------------------------[ railsapps ]-------------------------------<
 @current_recipe = "railsapps"
 @before_configs["railsapps"].call if @before_configs["railsapps"]
 say_recipe 'railsapps'
 @configs[@current_recipe] = config
-# >-------------------------- recipes/railsapps.rb ---------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/railsapps.rb
@@ -363,9 +357,13 @@ if options[:verbose]
   print "\nconfig: " ;p config
 end
 
+#TODO: dedicated copy #NOTE: (1) 最新レシピコピる：noattend諸元もコピる。(3) copyfrom対象のファイルもコピる　local-repo動作確認
+# NOTE: usage $ rm -rf my_app ; rails new my_app  -Tm RAILSCOMPOSER/composer.rb
 noattend = true #FIXME: templateオーバーライド  ---> require 'optparse' ; noattend = option[:noattend] 
 if noattend
   prefs[:apps4] = "rails-stripe-checkout" #TODO:
+  prefs[:repo] = "#{File.expand_path '~/Download/src/RAILSCOMPOSER_REPO/'}/"
+# prefs[:repo] = File.expand_path '~/Download/src/rails-stripe-checkout/'
   prefs[:prod_webserver] = prefs[:dev_webserver] = "puma"
   prefs[:database] = "sqlite"
   prefs[:templates] = "erb" # "haml"
@@ -379,7 +377,7 @@ if noattend
   prefs[:tests] = "none" # "rspec"
   prefs[:email] = 'none' # "gmail"
   prefs[:authentication] = "devise" # "omniauth"  <-- github facebook twitter linkedin google_oauth2 tumblr 
-  prefs[:devise_modules] = "invitable" #"default"
+  prefs[:devise_modules] = "default" #"invitable"
   # prefs[:authorization] = "none" "roles" "pundit"
   prefs[:analytics] = "none" # ga segmentio with ga_id, segmentio_api_key
   prefs[:announcements] = 'none' # 'mailinglist'
@@ -474,16 +472,12 @@ unless prefs[:announcements]
     prefs[:announcements] = 'none'
   end
 end
-# >-------------------------- recipes/railsapps.rb ---------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >------------------------------[ learn_rails ]------------------------------<
 @current_recipe = "learn_rails"
 @before_configs["learn_rails"].call if @before_configs["learn_rails"]
 say_recipe 'learn_rails'
 @configs[@current_recipe] = config
-# >------------------------- recipes/learn_rails.rb --------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/learn_rails.rb
@@ -538,23 +532,12 @@ if prefer :apps4, 'learn-rails'
     say_wizard "recipe stage three"
     repo = 'https://raw.github.com/RailsApps/learn-rails/master/'
 
-    # >-------------------------------[ Models ]--------------------------------<
-
     copy_from_repo 'app/models/contact.rb', :repo => repo
     copy_from_repo 'app/models/visitor.rb', :repo => repo
-
-    # >-------------------------------[ Controllers ]--------------------------------<
-
     copy_from_repo 'app/controllers/contacts_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
-
-    # >-------------------------------[ Mailers ]--------------------------------<
-
     generate 'mailer UserMailer'
     copy_from_repo 'app/mailers/user_mailer.rb', :repo => repo
-
-    # >-------------------------------[ Views ]--------------------------------<
-
     if Rails::VERSION::MAJOR == 5 && Rails::VERSION::MINOR >= 1
       copy_from_repo 'app/views/visitors/new.html.erb', :repo => repo
       copy_from_repo 'app/views/contacts/new.html.erb', :repo => repo
@@ -571,16 +554,8 @@ if prefer :apps4, 'learn-rails'
     # create navigation links using the rails_layout gem
     generate 'layout:navigation -f'
 
-    # >-------------------------------[ Routes ]--------------------------------<
-
     copy_from_repo 'config/routes.rb', :repo => repo
-
-    # >-------------------------------[ Assets ]--------------------------------<
-
     copy_from_repo 'app/assets/javascripts/segment.js', :repo => repo
-
-    # >-------------------------------[ Tests ]--------------------------------<
-
     copy_from_repo 'test/test_helper.rb', :repo => repo
     copy_from_repo 'test/integration/home_page_test.rb', :repo => repo
     copy_from_repo 'test/models/visitor_test.rb', :repo => repo
@@ -588,16 +563,12 @@ if prefer :apps4, 'learn-rails'
     run 'bundle exec rake db:migrate'
   end
 end
-# >------------------------- recipes/learn_rails.rb --------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >----------------------------[ rails_bootstrap ]----------------------------<
 @current_recipe = "rails_bootstrap"
 @before_configs["rails_bootstrap"].call if @before_configs["rails_bootstrap"]
 say_recipe 'rails_bootstrap'
 @configs[@current_recipe] = config
-# >----------------------- recipes/rails_bootstrap.rb ------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_bootstrap.rb
@@ -619,16 +590,12 @@ if prefer :apps4, 'rails-bootstrap'
     [["Bootstrap 4.0", "bootstrap4"], ["Bootstrap 3.3", "bootstrap3"]] unless prefs.has_key? :frontend
   prefs[:rvmrc] = true
 end
-# >----------------------- recipes/rails_bootstrap.rb ------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >---------------------------[ rails_foundation ]----------------------------<
 @current_recipe = "rails_foundation"
 @before_configs["rails_foundation"].call if @before_configs["rails_foundation"]
 say_recipe 'rails_foundation'
 @configs[@current_recipe] = config
-# >----------------------- recipes/rails_foundation.rb -----------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_foundation.rb
@@ -649,16 +616,12 @@ if prefer :apps4, 'rails-foundation'
   prefs[:rubocop] = false
   prefs[:rvmrc] = true
 end
-# >----------------------- recipes/rails_foundation.rb -----------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >----------------------------[ rails_omniauth ]-----------------------------<
 @current_recipe = "rails_omniauth"
 @before_configs["rails_omniauth"].call if @before_configs["rails_omniauth"]
 say_recipe 'rails_omniauth'
 @configs[@current_recipe] = config
-# >------------------------ recipes/rails_omniauth.rb ------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_omniauth.rb
@@ -677,16 +640,12 @@ if prefer :apps4, 'rails-omniauth'
   prefs[:rubocop] = false
   prefs[:rvmrc] = true
 end
-# >------------------------ recipes/rails_omniauth.rb ------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >-----------------------------[ rails_devise ]------------------------------<
 @current_recipe = "rails_devise"
 @before_configs["rails_devise"].call if @before_configs["rails_devise"]
 say_recipe 'rails_devise'
 @configs[@current_recipe] = config
-# >------------------------- recipes/rails_devise.rb -------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_devise.rb
@@ -704,16 +663,12 @@ if prefer :apps4, 'rails-devise'
   prefs[:rubocop] = false
   prefs[:rvmrc] = true
 end
-# >------------------------- recipes/rails_devise.rb -------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >--------------------------[ rails_devise_roles ]---------------------------<
 @current_recipe = "rails_devise_roles"
 @before_configs["rails_devise_roles"].call if @before_configs["rails_devise_roles"]
 say_recipe 'rails_devise_roles'
 @configs[@current_recipe] = config
-# >---------------------- recipes/rails_devise_roles.rb ----------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_devise_roles.rb
@@ -730,16 +685,12 @@ if prefer :apps4, 'rails-devise-roles'
   prefs[:rubocop] = false
   prefs[:rvmrc] = true
 end
-# >---------------------- recipes/rails_devise_roles.rb ----------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >--------------------------[ rails_devise_pundit ]--------------------------<
 @current_recipe = "rails_devise_pundit"
 @before_configs["rails_devise_pundit"].call if @before_configs["rails_devise_pundit"]
 say_recipe 'rails_devise_pundit'
 @configs[@current_recipe] = config
-# >--------------------- recipes/rails_devise_pundit.rb ----------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_devise_pundit.rb
@@ -756,27 +707,21 @@ if prefer :apps4, 'rails-devise-pundit'
   prefs[:rubocop] = false
   prefs[:rvmrc] = true
 end
-# >--------------------- recipes/rails_devise_pundit.rb ----------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >-------------------------[ rails_signup_download ]-------------------------<
 @current_recipe = "rails_signup_download"
 @before_configs["rails_signup_download"].call if @before_configs["rails_signup_download"]
 say_recipe 'rails_signup_download'
 @configs[@current_recipe] = config
-# >-------------------- recipes/rails_signup_download.rb ---------------------start<
-
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_signup_download.rb
-
 if prefer :apps4, 'rails-signup-download'
-  unless noattend   #NOTE: important
+  unless noattend
     prefs[:devise_modules] = false
     prefs[:form_builder] = false
     prefs[:git] = true
+    prefs[:authentication] = 'devise'
   end
-  prefs[:authentication] = 'devise'
   prefs[:authorization] = 'roles'
   prefs[:better_errors] = true
   prefs[:local_env_file] = false
@@ -786,67 +731,32 @@ if prefer :apps4, 'rails-signup-download'
   prefs[:locale] = 'none'
   prefs[:rubocop] = false
   prefs[:rvmrc] = true
-
   # gems
   add_gem 'gibbon'
   add_gem 'sucker_punch'
-
   stage_three do
     say_wizard "recipe stage three"
-    # NOTE: usage $ rm -rf my_app ; rails new my_app  -Tm RAILSCOMPOSER/composer.rb
-    # repo = 'https://raw.github.com/RailsApps/rails-signup-download/master/'
-    repo = '~/Download/src/RAILSCOMPOSER_REPO/' #TODO: make latest perfect repo as LOCALREPO
-
-    # >-------------------------------[ Config ]---------------------------------<
-
+    repo = prefs[:repo] || 'https://raw.github.com/RailsApps/rails-signup-download/master/'
+    copy_from_repo 'app/models/user.rb', :repo => repo  #NOTE: suspicious
     copy_from_repo 'config/initializers/active_job.rb', :repo => repo
-
-    # >-------------------------------[ Models ]--------------------------------<
-
-    # copy_from_repo 'app/models/user.rb', :repo => repo
-    # if (prefer :devise_modules, 'confirmable') || (prefer :devise_modules, 'invitable')
-    #   #NOTE: gsub_file二度念押し
-    #   gsub_file 'app/models/user.rb', /:registerable,/, ":registerable, :confirmable," #XXX
-    # end
-    # >-------------------------------[ Controllers ]--------------------------------<
-
     copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/products_controller.rb', :repo => repo
-
-    # >-------------------------------[ Jobs ]---------------------------------<
-
     copy_from_repo 'app/jobs/mailing_list_signup_job.rb', :repo => repo
-
-    # >-------------------------------[ Views ]--------------------------------<
-
     copy_from_repo 'app/views/visitors/index.html.erb', :repo => repo
     copy_from_repo 'app/views/products/product.pdf', :repo => repo
-
-    # >-------------------------------[ Routes ]--------------------------------<
-
     copy_from_repo 'config/routes.rb', :repo => repo
-
-    # >-------------------------------[ Tests ]--------------------------------<
-
     copy_from_repo 'spec/features/users/product_acquisition_spec.rb', :repo => repo
     copy_from_repo 'spec/controllers/products_controller_spec.rb', :repo => repo
-
   end
 end
-# >-------------------- recipes/rails_signup_download.rb ---------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >-------------------------[ rails_signup_thankyou ]-------------------------<
 @current_recipe = "rails_signup_thankyou"
 @before_configs["rails_signup_thankyou"].call if @before_configs["rails_signup_thankyou"]
 say_recipe 'rails_signup_thankyou'
 @configs[@current_recipe] = config
-# >-------------------- recipes/rails_signup_thankyou.rb ---------------------start<
-
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_signup_thankyou.rb
-
 if prefer :apps4, 'rails-signup-thankyou'
   prefs[:authentication] = 'devise'
   prefs[:authorization] = 'roles'
@@ -881,44 +791,25 @@ if prefer :apps4, 'rails-signup-thankyou'
     say_wizard "recipe stage three"
     repo = 'https://raw.github.com/RailsApps/rails-signup-thankyou/master/'
 
-    # >-------------------------------[ Models ]--------------------------------<
-
     copy_from_repo 'app/models/user.rb', :repo => repo
-
-    # >-------------------------------[ Controllers ]--------------------------------<
-
     copy_from_repo 'app/controllers/application_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/products_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/thank_you_controller.rb', :repo => repo
-
-    # >-------------------------------[ Views ]--------------------------------<
-
     copy_from_repo 'app/views/visitors/index.html.erb', :repo => repo
     copy_from_repo 'app/views/products/product.pdf', :repo => repo
     copy_from_repo 'app/views/thank_you/index.html.erb', :repo => repo
-
-    # >-------------------------------[ Routes ]--------------------------------<
-
     copy_from_repo 'config/routes.rb', :repo => repo
-
-    # >-------------------------------[ Tests ]--------------------------------<
-
     copy_from_repo 'spec/features/users/product_acquisition_spec.rb', :repo => repo
     copy_from_repo 'spec/controllers/products_controller_spec.rb', :repo => repo
-
   end
 end
-# >-------------------- recipes/rails_signup_thankyou.rb ---------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >----------------------[ rails_mailinglist_activejob ]----------------------<
 @current_recipe = "rails_mailinglist_activejob"
 @before_configs["rails_mailinglist_activejob"].call if @before_configs["rails_mailinglist_activejob"]
 say_recipe 'rails_mailinglist_activejob'
 @configs[@current_recipe] = config
-# >----------------- recipes/rails_mailinglist_activejob.rb ------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_mailinglist_activejob.rb
@@ -952,62 +843,37 @@ if prefer :apps4, 'rails-mailinglist-activejob'
     say_wizard "recipe stage three"
     repo = 'https://raw.github.com/RailsApps/rails-mailinglist-activejob/master/'
 
-    # >-------------------------------[ Config ]---------------------------------<
-
     copy_from_repo 'config/initializers/active_job.rb', :repo => repo
-
-    # >-------------------------------[ Models ]--------------------------------<
-
     copy_from_repo 'app/models/visitor.rb', :repo => repo
-
-    # >-------------------------------[ Controllers ]--------------------------<
-
     copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
-
-    # >-------------------------------[ Jobs ]---------------------------------<
-
     copy_from_repo 'app/jobs/mailing_list_signup_job.rb', :repo => repo
-
-    # >-------------------------------[ Views ]--------------------------------<
-
-    remove_file 'app/views/visitors/index.html.erb'
     copy_from_repo 'app/views/visitors/new.html.erb', :repo => repo
-
-    # >-------------------------------[ Routes ]-------------------------------<
-
+    remove_file 'app/views/visitors/index.html.erb'
     gsub_file 'config/routes.rb', /  root to: 'visitors#index'\n/, ''
     inject_into_file 'config/routes.rb', "  root to: 'visitors#new'\n", :after => "routes.draw do\n"
     route = '  resources :visitors, only: [:new, :create]'
     inject_into_file 'config/routes.rb', route + "\n", :after => "routes.draw do\n"
-
-    # >-------------------------------[ Tests ]--------------------------------<
-
     ### tests not implemented
-
   end
 end
-# >----------------- recipes/rails_mailinglist_activejob.rb ------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >-------------------------[ rails_stripe_checkout ]-------------------------<
 @current_recipe = "rails_stripe_checkout"
 @before_configs["rails_stripe_checkout"].call if @before_configs["rails_stripe_checkout"]
 say_recipe 'rails_stripe_checkout'
 @configs[@current_recipe] = config
-# >-------------------- recipes/rails_stripe_checkout.rb ---------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_stripe_checkout.rb
 
 if prefer :apps4, 'rails-stripe-checkout'
-  prefs[:frontend] = 'bootstrap3'
-  prefs[:authentication] = 'devise'
   prefs[:authorization] = 'roles'
-  unless noattend   #NOTE: important
+  unless noattend
+    prefs[:authentication] = 'devise'
     prefs[:devise_modules] = false
     prefs[:form_builder] = false
     prefs[:git] = true
+    prefs[:frontend] = 'bootstrap3'
   end
   prefs[:better_errors] = true
   prefs[:local_env_file] = false
@@ -1025,60 +891,32 @@ if prefer :apps4, 'rails-stripe-checkout'
 
   stage_three do
     say_wizard "recipe stage three"
-    # NOTE: usage $ rm -rf my_app ; rails new my_app  -Tm RAILSCOMPOSER/composer.rb
-    # repo = 'https://raw.github.com/RailsApps/rails-stripe-checkout/master/'
-    repo = '~/Download/src/rails-stripe-checkout/'
-    # repo = '~/Download/src/RAILSCOMPOSER_REPO/' #TODO: make latest perfect repo as LOCALREPO
-
-    # >-------------------------------[ Config ]---------------------------------<
-
-    copy_from_repo 'config/initializers/active_job.rb', :repo => repo
-    # copy_from_repo 'config/initializers/devise_permitted_parameters.rb', :repo => repo #XXX: buggy
-    copy_from_repo 'config/initializers/stripe.rb', :repo => repo
-
-    # >-------------------------------[ Assets ]--------------------------------<
-
+    repo = prefs[:repo] || 'https://raw.github.com/RailsApps/rails-stripe-checkout/master/'
     copy_from_repo 'app/assets/images/rubyonrails.png', :repo => repo
-
-    # >-------------------------------[ Models ]--------------------------------<
-    # copy_from_repo 'app/models/user.rb', :repo => repo #XXX: buggy
-    # >-------------------------------[ Controllers ]--------------------------------<
-
-    copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/products_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/registrations_controller.rb', :repo => repo
-
-    # >-------------------------------[ Jobs ]---------------------------------<
-
+    copy_from_repo 'app/controllers/thank_you_controller.rb', :repo => repo
+    copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
     copy_from_repo 'app/jobs/mailing_list_signup_job.rb', :repo => repo
-
-    # >-------------------------------[ Views ]--------------------------------<
-
-    copy_from_repo 'app/views/devise/registrations/new.html.erb', :repo => repo #TODO: rails g devise:view 不調
-    copy_from_repo 'app/views/visitors/_purchase.html.erb', :repo => repo
-    copy_from_repo 'app/views/visitors/index.html.erb', :repo => repo
     copy_from_repo 'app/views/products/product.pdf', :repo => repo
-
-    # >-------------------------------[ Routes ]--------------------------------<
-
-    copy_from_repo 'config/routes.rb', :repo => repo
-
-    # >-------------------------------[ Tests ]--------------------------------<
-
+    copy_from_repo 'config/initializers/active_job.rb', :repo => repo
+    copy_from_repo 'config/initializers/stripe.rb', :repo => repo
+    copy_from_repo 'app/controllers/application_controller.rb', :repo => repo, :suffix => repo
+    copy_from_repo 'app/models/user.rb', :repo => repo, :suffix => repo
+    copy_from_repo 'app/views/devise/registrations/new.html.erb', :repo => repo, :suffix => repo
+    copy_from_repo 'app/views/visitors/_purchase.html.erb', :repo => repo, :suffix => repo
+    copy_from_repo 'app/views/visitors/index.html.erb', :repo => repo, :suffix => repo
+    copy_from_repo 'config/routes.rb', :repo => repo, :suffix => repo
+    # copy_from_repo 'config/initializers/devise_permitted_parameters.rb', :repo => repo #XXX: buggy
     ### tests not implemented
-
   end
 end
-# >-------------------- recipes/rails_stripe_checkout.rb ---------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >-------------------------[ rails_stripe_coupons ]--------------------------<
 @current_recipe = "rails_stripe_coupons"
 @before_configs["rails_stripe_coupons"].call if @before_configs["rails_stripe_coupons"]
 say_recipe 'rails_stripe_coupons'
 @configs[@current_recipe] = config
-# >--------------------- recipes/rails_stripe_coupons.rb ---------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_stripe_coupons.rb
@@ -1109,56 +947,27 @@ if prefer :apps4, 'rails-stripe-coupons'
     # repo = 'https://raw.github.com/RailsApps/rails-stripe-coupons/master/'
     repo = '~/Download/src/rails-stripe-checkout/'
 
-    # >-------------------------------[ Migrations ]---------------------------------<
-
     generate 'migration AddStripeTokenToUsers stripe_token:string'
     generate 'scaffold Coupon code role mailing_list_id list_group price:integer --no-test-framework --no-helper --no-assets --no-jbuilder'
     generate 'migration AddCouponRefToUsers coupon:references'
     run 'bundle exec rake db:migrate'
-
-    # >-------------------------------[ Config ]---------------------------------<
-
     copy_from_repo 'config/initializers/active_job.rb', :repo => repo
     copy_from_repo 'config/initializers/stripe.rb', :repo => repo
-
-    # >-------------------------------[ Assets ]--------------------------------<
-
     copy_from_repo 'app/assets/images/rubyonrails.png', :repo => repo
-
-    # >-------------------------------[ Controllers ]--------------------------------<
-
     copy_from_repo 'app/controllers/coupons_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/products_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/registrations_controller.rb', :repo => repo
-
-    # >-------------------------------[ Helpers ]--------------------------------<
-
     copy_from_repo 'app/helpers/application_helper.rb', :repo => repo
-
-    # >-------------------------------[ Jobs ]---------------------------------<
-
     copy_from_repo 'app/jobs/mailing_list_signup_job.rb', :repo => repo
     copy_from_repo 'app/jobs/payment_job.rb', :repo => repo
-
-    # >-------------------------------[ Mailers ]--------------------------------<
-
     copy_from_repo 'app/mailers/application_mailer.rb', :repo => repo
     copy_from_repo 'app/mailers/payment_failure_mailer.rb', :repo => repo
-
-    # >-------------------------------[ Models ]--------------------------------<
-
     copy_from_repo 'app/models/coupon.rb', :repo => repo
     copy_from_repo 'app/models/user.rb', :repo => repo
-
-    # >-------------------------------[ Services ]---------------------------------<
-
     copy_from_repo 'app/services/create_couponcodes_service.rb', :repo => repo
     copy_from_repo 'app/services/mailing_list_signup_service.rb', :repo => repo
     copy_from_repo 'app/services/make_payment_service.rb', :repo => repo
-
-    # >-------------------------------[ Views ]--------------------------------<
-
     copy_from_repo 'app/views/coupons/_form.html.erb', :repo => repo
     copy_from_repo 'app/views/coupons/edit.html.erb', :repo => repo
     copy_from_repo 'app/views/coupons/index.html.erb', :repo => repo
@@ -1179,27 +988,16 @@ if prefer :apps4, 'rails-stripe-coupons'
     copy_from_repo 'app/views/visitors/index.html.erb', :repo => repo
     copy_from_repo 'app/views/products/product.pdf', :repo => repo
     copy_from_repo 'public/offer.html', :repo => repo
-
-    # >-------------------------------[ Routes ]--------------------------------<
-
     copy_from_repo 'config/routes.rb', :repo => repo
-
-    # >-------------------------------[ Tests ]--------------------------------<
-
     ### tests not implemented
-
   end
 end
-# >--------------------- recipes/rails_stripe_coupons.rb ---------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >---------------------[ rails_stripe_membership_saas ]----------------------<
 @current_recipe = "rails_stripe_membership_saas"
 @before_configs["rails_stripe_membership_saas"].call if @before_configs["rails_stripe_membership_saas"]
 say_recipe 'rails_stripe_membership_saas'
 @configs[@current_recipe] = config
-# >----------------- recipes/rails_stripe_membership_saas.rb -----------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/rails_stripe_membership_saas.rb
@@ -1233,52 +1031,27 @@ if prefer :apps4, 'rails-stripe-membership-saas'
     say_wizard "recipe stage three"
     repo = 'https://raw.github.com/RailsApps/rails-stripe-membership-saas/master/'
 
-    # >-------------------------------[ Migrations ]---------------------------------<
-
     generate 'payola:install'
     generate 'model Plan name stripe_id interval amount:integer --no-test-framework'
     generate 'migration AddPlanRefToUsers plan:references'
     generate 'migration RemoveNameFromUsers name'
     run 'bundle exec rake db:migrate'
 
-    # >-------------------------------[ Config ]---------------------------------<
-
     copy_from_repo 'config/initializers/active_job.rb', :repo => repo
     copy_from_repo 'config/initializers/payola.rb', :repo => repo
     copy_from_repo 'db/seeds.rb', :repo => repo
-
-    # >-------------------------------[ Assets ]--------------------------------<
-
     copy_from_repo 'app/assets/stylesheets/pricing.css.scss', :repo => repo
-
-    # >-------------------------------[ Controllers ]--------------------------------<
-
     copy_from_repo 'app/controllers/application_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/content_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/visitors_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/products_controller.rb', :repo => repo
     copy_from_repo 'app/controllers/registrations_controller.rb', :repo => repo
-
-    # >-------------------------------[ Jobs ]---------------------------------<
-
     copy_from_repo 'app/jobs/mailing_list_signup_job.rb', :repo => repo
-
-    # >-------------------------------[ Mailers ]--------------------------------<
-
     copy_from_repo 'app/mailers/application_mailer.rb', :repo => repo
     copy_from_repo 'app/mailers/user_mailer.rb', :repo => repo
-
-    # >-------------------------------[ Models ]--------------------------------<
-
     copy_from_repo 'app/models/plan.rb', :repo => repo
     copy_from_repo 'app/models/user.rb', :repo => repo
-
-    # >-------------------------------[ Services ]---------------------------------<
-
     copy_from_repo 'app/services/create_plan_service.rb', :repo => repo
-
-    # >-------------------------------[ Views ]--------------------------------<
-
     copy_from_repo 'app/views/content/gold.html.erb', :repo => repo
     copy_from_repo 'app/views/content/platinum.html.erb', :repo => repo
     copy_from_repo 'app/views/content/silver.html.erb', :repo => repo
@@ -1292,27 +1065,16 @@ if prefer :apps4, 'rails-stripe-membership-saas'
     copy_from_repo 'app/views/user_mailer/expire_email.text.erb', :repo => repo
     copy_from_repo 'app/views/visitors/index.html.erb', :repo => repo
     copy_from_repo 'app/views/products/product.pdf', :repo => repo
-
-    # >-------------------------------[ Routes ]--------------------------------<
-
     copy_from_repo 'config/routes.rb', :repo => repo
-
-    # >-------------------------------[ Tests ]--------------------------------<
-
     ### tests not implemented
-
   end
 end
-# >----------------- recipes/rails_stripe_membership_saas.rb -----------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >---------------------------------[ setup ]---------------------------------<
 @current_recipe = "setup"
 @before_configs["setup"].call if @before_configs["setup"]
 say_recipe 'setup'
 @configs[@current_recipe] = config
-# >---------------------------- recipes/setup.rb -----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/setup.rb
@@ -1489,16 +1251,12 @@ development:
   dashboard: #{prefs[:dashboard]}
 TEXT
 end
-# >---------------------------- recipes/setup.rb -----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >--------------------------------[ locale ]---------------------------------<
 @current_recipe = "locale"
 @before_configs["locale"].call if @before_configs["locale"]
 say_recipe 'locale'
 @configs[@current_recipe] = config
-# >---------------------------- recipes/locale.rb ----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/locale.rb
@@ -1521,16 +1279,12 @@ stage_two do
     append_to_file locale_filename, "#{prefs[:locale]}:"
   end
 end
-# >---------------------------- recipes/locale.rb ----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >--------------------------------[ readme ]---------------------------------<
 @current_recipe = "readme"
 @before_configs["readme"].call if @before_configs["readme"]
 say_recipe 'readme'
 @configs[@current_recipe] = config
-# >---------------------------- recipes/readme.rb ----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/readme.rb
@@ -1698,16 +1452,12 @@ TEXT
   git :commit => '-qm "rails_apps_composer: add README files"' if prefer :git, true
 
 end
-# >---------------------------- recipes/readme.rb ----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >---------------------------------[ gems ]----------------------------------<
 @current_recipe = "gems"
 @before_configs["gems"].call if @before_configs["gems"]
 say_recipe 'gems'
 @configs[@current_recipe] = config
-# >----------------------------- recipes/gems.rb -----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/gems.rb
@@ -1991,16 +1741,12 @@ FILE
   git :add => '-A' if prefer :git, true
   git :commit => '-qm "rails_apps_composer: generators"' if prefer :git, true
 end
-# >----------------------------- recipes/gems.rb -----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >---------------------------------[ tests ]---------------------------------<
 @current_recipe = "tests"
 @before_configs["tests"].call if @before_configs["tests"]
 say_recipe 'tests'
 @configs[@current_recipe] = config
-# >---------------------------- recipes/tests.rb -----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/tests.rb
@@ -2051,16 +1797,12 @@ stage_three do
     end
   end
 end
-# >---------------------------- recipes/tests.rb -----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >---------------------------------[ email ]---------------------------------<
 @current_recipe = "email"
 @before_configs["email"].call if @before_configs["email"]
 say_recipe 'email'
 @configs[@current_recipe] = config
-# >---------------------------- recipes/email.rb -----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/email.rb
@@ -2117,16 +1859,12 @@ TEXT
   git :add => '-A' if prefer :git, true
   git :commit => '-qm "rails_apps_composer: set email accounts"' if prefer :git, true
 end
-# >---------------------------- recipes/email.rb -----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >--------------------------------[ devise ]---------------------------------<
 @current_recipe = "devise"
 @before_configs["devise"].call if @before_configs["devise"]
 say_recipe 'devise'
 @configs[@current_recipe] = config
-# >---------------------------- recipes/devise.rb ----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/devise.rb
@@ -2136,41 +1874,35 @@ stage_two do
   if prefer :authentication, 'devise'
     # prevent logging of password_confirmation
     gsub_file 'config/initializers/filter_parameter_logging.rb', /:password/, ':password, :password_confirmation'
-    say_wizard "devise処理 ###########################################"
     generate 'devise:install'
     generate 'devise_invitable:install' if prefer :devise_modules, 'invitable'
     generate 'devise user' # create the User model
-    generate 'devise:views'
     unless :apps4.to_s.include? 'rails-stripe-'
       generate 'migration AddNameToUsers name:string'
     end
     if (prefer :devise_modules, 'confirmable') || (prefer :devise_modules, 'invitable')
-      say_wizard "iuser.rbとmigration処理 ###########################################"
       gsub_file 'app/models/user.rb', /:registerable,/, ":registerable, :confirmable,"
-      # generate 'migration AddConfirmableToUsers confirmation_token:string confirmed_at:datetime confirmation_sent_at:datetime unconfirmed_email:string'
-      # copy_rails_migration_file(dir1, dir2, wildcard_pattern)
-      dest_dir = 'db/migrate/'
-      FileUtils.mkdir_p dest_dir
-      file_from =  Dir.glob(File.expand_path('../RAILSCOMPOSER_REPO/db/migrate/*_devise_create_users.rb')).first
-      file_to   =  Dir.glob(File.expand_path("#{dest_dir}*_devise_create_users.rb")).first
-      copy_from file_from, file_to
+      generate 'migration AddConfirmableToUsers confirmation_token:string confirmed_at:datetime confirmation_sent_at:datetime unconfirmed_email:string'
     end
+    # copy_rails_migration_file(dir1, dir2, wildcard_pattern) # NOTE: block below are supplemental
+    say_wizard "devise処理 user.rbとmigration処理 ###########################################"
+    repo = File.expand_path '~/Download/src/RAILSCOMPOSER_REPO/'
+    file_from = "#{repo}/db/migrate/*_devise_create_users.rb"
+    file_to   = "#{@destination_stack.first    }/db/migrate/*_devise_create_users.rb"
+    copy_from file_from, file_to, {:mkdir => true, :glob => true}
+    # generate 'devise:views'
     run 'bundle exec rake db:migrate'
   end
   ### GIT ###
   git :add => '-A' if prefer :git, true
   git :commit => '-qm "rails_apps_composer: devise"' if prefer :git, true
 end
-# >---------------------------- recipes/devise.rb ----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >-------------------------------[ omniauth ]--------------------------------<
 @current_recipe = "omniauth"
 @before_configs["omniauth"].call if @before_configs["omniauth"]
 say_recipe 'omniauth'
 @configs[@current_recipe] = config
-# >--------------------------- recipes/omniauth.rb ---------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/omniauth.rb
@@ -2200,16 +1932,12 @@ TEXT
   git :add => '-A' if prefer :git, true
   git :commit => '-qm "rails_apps_composer: omniauth"' if prefer :git, true
 end
-# >--------------------------- recipes/omniauth.rb ---------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >---------------------------------[ roles ]---------------------------------<
 @current_recipe = "roles"
 @before_configs["roles"].call if @before_configs["roles"]
 say_recipe 'roles'
 @configs[@current_recipe] = config
-# >---------------------------- recipes/roles.rb -----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/roles.rb
@@ -2241,16 +1969,12 @@ RUBY
   git :add => '-A' if prefer :git, true
   git :commit => '-qm "rails_apps_composer: add roles to a User model"' if prefer :git, true
 end
-# >---------------------------- recipes/roles.rb -----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >-------------------------------[ frontend ]--------------------------------<
 @current_recipe = "frontend"
 @before_configs["frontend"].call if @before_configs["frontend"]
 say_recipe 'frontend'
 @configs[@current_recipe] = config
-# >--------------------------- recipes/frontend.rb ---------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/frontend.rb
@@ -2283,16 +2007,12 @@ stage_two do
   git :add => '-A' if prefer :git, true
   git :commit => '-qm "rails_apps_composer: front-end framework"' if prefer :git, true
 end
-# >--------------------------- recipes/frontend.rb ---------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >---------------------------------[ pages ]---------------------------------<
 @current_recipe = "pages"
 @before_configs["pages"].call if @before_configs["pages"]
 say_recipe 'pages'
 @configs[@current_recipe] = config
-# >---------------------------- recipes/pages.rb -----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/pages.rb
@@ -2374,16 +2094,12 @@ stage_four do
   git :add => '-A' if prefer :git, true
   git :commit => '-qm "rails_apps_composer: add Bootstrap page layouts"' if prefer :git, true
 end
-# >---------------------------- recipes/pages.rb -----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >---------------------------------[ init ]----------------------------------<
 @current_recipe = "init"
 @before_configs["init"].call if @before_configs["init"]
 say_recipe 'init'
 @configs[@current_recipe] = config
-# >----------------------------- recipes/init.rb -----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/init.rb
@@ -2562,16 +2278,12 @@ FILE
   git :add => '-A' if prefer :git, true
   git :commit => '-qm "rails_apps_composer: navigation links"' if prefer :git, true
 end
-# >----------------------------- recipes/init.rb -----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >-------------------------------[ analytics ]-------------------------------<
 @current_recipe = "analytics"
 @before_configs["analytics"].call if @before_configs["analytics"]
 say_recipe 'analytics'
 @configs[@current_recipe] = config
-# >-------------------------- recipes/analytics.rb ---------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/analytics.rb
@@ -2606,16 +2318,12 @@ stage_two do
   git :add => '-A' if prefer :git, true
   git :commit => '-qm "rails_apps_composer: add analytics"' if prefer :git, true
 end
-# >-------------------------- recipes/analytics.rb ---------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >------------------------------[ deployment ]-------------------------------<
 @current_recipe = "deployment"
 @before_configs["deployment"].call if @before_configs["deployment"]
 say_recipe 'deployment'
 @configs[@current_recipe] = config
-# >-------------------------- recipes/deployment.rb --------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/deployment.rb
@@ -2653,10 +2361,7 @@ stage_three do
   git :add => '-A' if prefer :git, true
   git :commit => '-qm "rails_apps_composer: prepare for deployment"' if prefer :git, true
 end
-# >-------------------------- recipes/deployment.rb --------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
-# >-------------------------- templates/recipe.erb ---------------------------start<
 # >--------------------------------[ extras ]---------------------------------<
 @current_recipe = "extras"
 @before_configs["extras"].call if @before_configs["extras"]
@@ -2670,7 +2375,6 @@ config['better_errors'] = yes_wizard?("Improve error reporting with 'better_erro
 config['pry'] = yes_wizard?("Use 'pry' as console replacement during development and test?") if true && true unless config.key?('pry') || prefs.has_key?(:pry)
 config['rubocop'] = yes_wizard?("Use 'rubocop' to ensure that your code conforms to the Ruby style guide?") if true && true unless config.key?('rubocop') || prefs.has_key?(:rubocop)
 @configs[@current_recipe] = config
-# >---------------------------- recipes/extras.rb ----------------------------start<
 
 # Application template recipe for the rails_apps_composer. Change the recipe here:
 # https://github.com/RailsApps/rails_apps_composer/blob/master/recipes/extras.rb
@@ -2829,14 +2533,11 @@ if prefs[:github]
     end
   end
 end
-# >---------------------------- recipes/extras.rb ----------------------------end<
-# >-------------------------- templates/recipe.erb ---------------------------end<
 
 
 # >-----------------------------[ Final Gemfile Write ]------------------------------<
 Gemfile.write
 
-# >---------------------------------[ Diagnostics ]----------------------------------<
 
 # remove prefs which are diagnostically irrelevant
 redacted_prefs = prefs.clone
@@ -2862,7 +2563,6 @@ end
 
 @current_recipe = nil
 
-# >-----------------------------[ Run 'Bundle Install' ]-------------------------------<
 
 say_wizard "Installing Bundler (in case it is not installed)."
 run 'gem install bundler'
@@ -2870,7 +2570,6 @@ say_wizard "Installing gems. This will take a while."
 run 'bundle install --without production'
 say_wizard "Updating gem paths."
 Gem.clear_paths
-# >-----------------------------[ Run 'stage_two' Callbacks ]-------------------------------<
 
 say_wizard "Stage Two (running recipe 'stage_two' callbacks)."
 if prefer :templates, 'haml'
@@ -2884,13 +2583,11 @@ say_wizard "importing html2haml and haml2slim conversion tools"
 end
 @after_blocks.each{|b| config = @configs[b[0]] || {}; @current_recipe = b[0]; puts @current_recipe; b[1].call}
 
-# >-----------------------------[ Run 'stage_three' Callbacks ]-------------------------------<
 
 @current_recipe = nil
 say_wizard "Stage Three (running recipe 'stage_three' callbacks)."
 @stage_three_blocks.each{|b| config = @configs[b[0]] || {}; @current_recipe = b[0]; puts @current_recipe; b[1].call}
 
-# >-----------------------------[ Run 'stage_four' Callbacks ]-------------------------------<
 
 @current_recipe = nil
 say_wizard "Stage Four (running recipe 'stage_four' callbacks)."
