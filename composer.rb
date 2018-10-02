@@ -237,6 +237,7 @@ def html_to_slim(source)
   html = open(thor_complient_path(source)) {|input| input.binmode.read }
   # html = open(source) {|input| input.binmode.read }
   haml = Html2haml::HTML.new(html, :erb => true, :xhtml => true).render
+  #NOTE: gem html2slimでは、deviceテンプレートなどをコンバートできない
   Haml2Slim.convert!(haml)
 end
 
@@ -366,8 +367,9 @@ if noattend
 # prefs[:repo] = File.expand_path '~/Download/src/rails-stripe-checkout/'
   prefs[:prod_webserver] = prefs[:dev_webserver] = "puma"
   prefs[:database] = "sqlite"
-  prefs[:templates] = "erb" # "haml"
-  # prefs[:templates] = "haml" #NG hamlにすると、gemの個別変換バグがある。
+  prefs[:templates] = "haml" #NG hamlにすると、gemの個別変換バグがある。
+  # prefs[:templates] = "erb"
+  # prefs[:templates] = "slim" #NG: erb2hamlはdevise未対応、haml2slimはthoughtbot administrate 未対応
   prefs[:dashboard] = "administrate" # none
   prefs[:form_builder] = "simple_form" # "none"
   prefs[:frontend] = "bootstrap3" # "none"
